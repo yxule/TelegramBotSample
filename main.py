@@ -54,11 +54,11 @@ def get_data(update: Update, is_query: bool = False) -> dict:
     return data
 
 class TelegramBotEdit:
-    async def _send_message(self, context: ContextTypes.DEFAULT_TYPE, chat_id: int, *args, **kwargs):
+    async def _send_message(self, context: ContextTypes.DEFAULT_TYPE, chat_id: int, **kwargs):
         try:
             await context.bot.send_message(
                 chat_id=chat_id,
-                *args, **kwargs
+                **kwargs
             )
         except Exception as exc: logging.error(exc)
     async def _edit_message(self, context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, text: str = None, reply_markup: InlineKeyboardMarkup = None):
@@ -94,7 +94,7 @@ class TelegramBotCallbackQuery(TelegramBotEdit):
     async def query_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = get_data(update, is_query=True)
 
-        if any([s in data['message'] for s in [CALLBACK_DATA_SEPARATORS]]):
+        if any([s in data['message'] for s in list(CALLBACK_DATA_SEPARATORS)]):
             # Handler-part for splitkeyboard return (like 'set_active:0' in callback)
             pass
         else:
@@ -107,7 +107,7 @@ class TelegramBot(TelegramBotCallbackQuery):
     async def message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = get_data(update)
 
-        if data == '': # Sample
+        if data['message'] == '': # Sample
             # Text message handler
             pass
         else:
