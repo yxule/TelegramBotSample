@@ -21,16 +21,22 @@ CALLBACK_DATA_SEPARATORS = getenv('CALLBACK_DATA_SEPARATORS')
 
 def get_data(update: Update, is_query: bool = False) -> dict:
     """Return a structuring `dict` with (`user_id`, `user_name`, `chat_id`, `chat_name`, `message`, `message_id`, `query`)"""
+    if is_query:
+        query = update.callback_query
+
+        message = query.data
+        message_id = query.message.message_id
+    else:
+        query = None
+
+        message = update.effective_message.text
+        message_id = update.effective_message.id
+    
     user_id = update.effective_sender.id
     user_name = update.effective_sender.name
 
     chat_id = update.effective_chat.id
     chat_name = update.effective_chat.full_name
-
-    message = update.effective_message.text
-    message_id = update.effective_message.id
-
-    query = update.callback_query if is_query else None
 
     data = {
         'user_id': user_id,
@@ -48,6 +54,13 @@ def get_data(update: Update, is_query: bool = False) -> dict:
     return data
 
 class TelegramBotEdit:
+    async def _send_message(self, context: ContextTypes.DEFAULT_TYPE, chat_id: int, *args, **kwargs):
+        try:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                *args, **kwargs
+            )
+        except Exception as exc: logging.error(exc)
     async def _edit_message(self, context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, text: str = None, reply_markup: InlineKeyboardMarkup = None):
         if all([not text, not reply_markup]): return
         try:
@@ -79,9 +92,9 @@ class TelegramBotCallbackQuery(TelegramBotEdit):
     def __init__(self): super().__init__()
 
     async def query_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        query: CallbackQuery = update.callback_query
+        data = get_data(update, is_query=True)
 
-        if any([s in query.data for s in [CALLBACK_DATA_SEPARATORS]]):
+        if any([s in data['message'] for s in [CALLBACK_DATA_SEPARATORS]]):
             # Handler-part for splitkeyboard return (like 'set_active:0' in callback)
             pass
         else:
@@ -94,10 +107,19 @@ class TelegramBot(TelegramBotCallbackQuery):
     async def message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = get_data(update)
 
+        if data == '': # Sample
+            # Text message handler
+            pass
+        else:
+            # Non-key-word
+            pass
+
     ### COMMANDS ###
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = get_data(update)
-        print(data)
+        # '/start' Command echo-sample
+        await self._send_message(context=context, chat_id=data['chat_id'], text=data['message'])
+        #
     ################
 
 if __name__ == "__main__":
@@ -113,7 +135,8 @@ if __name__ == "__main__":
     app.add_handlers(
         {
             -1: [start_command_handler],
-            1: [callback_query_handler]
+            1: [callback_query_handler],
+            2: [text_message_handler]
         }
     )
     
