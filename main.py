@@ -6,6 +6,8 @@ from os import path, getenv
 from json import load, dump
 from dotenv import load_dotenv
 
+from pydantic import BaseModel
+
 from telegram import Update, Message, CallbackQuery
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
@@ -19,39 +21,44 @@ load_dotenv('.env')
 TOKEN = getenv('TELEGRAM_BOT_TOKEN')
 CALLBACK_DATA_SEPARATORS = getenv('CALLBACK_DATA_SEPARATORS')
 
-def get_data(update: Update, is_query: bool = False) -> dict:
-    """Return a structuring `dict` with (`user_id`, `user_name`, `chat_id`, `chat_name`, `message`, `message_id`, `query`)"""
-    if is_query:
-        query = update.callback_query
+class UserModel(BaseModel):
+    user_id: int
+    user_name: str
 
-        message = query.data
-        message_id = query.message.message_id
-    else:
-        query = None
+    chat_id: int
+    chat_name: str
 
-        message = update.effective_message.text
-        message_id = update.effective_message.id
+    message: str
+    message_id: int
+
+    query: CallbackQuery | None = None
+
+def get_data(update: Update, is_query: bool = False) -> UserModel:
+    if is_query and not update.callback_query:
+        raise ValueError("is_query is True but no callback_query found in update")
     
-    user_id = update.effective_sender.id
-    user_name = update.effective_sender.name
-
-    chat_id = update.effective_chat.id
-    chat_name = update.effective_chat.full_name
-
-    data = {
-        'user_id': user_id,
-        'user_name': user_name,
+    model = UserModel(
+        user_id     = update.effective_sender.id,
+        user_name   = update.effective_sender.name,
         
-        'chat_id': chat_id,
-        'chat_name': chat_name,
+        chat_id     = update.effective_chat.id,
+        chat_name   = update.effective_chat.full_name,
 
-        'message': message,
-        'message_id': message_id,
+        message     = update.callback_query.data                if is_query else update.effective_message.text,
+        message_id  = update.callback_query.message.message_id  if is_query else update.effective_message.id,
 
-        'query': query
-    }
+        query       = update.callback_query                     if is_query else None
+    )
+    
+    return model
 
-    return data
+class TelegramBotKeyboards:
+    sample_reply_keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [InlineKeyboardButton("Button 1", callback_data="button1")],
+            [InlineKeyboardButton("Button 2", callback_data="button2")]
+        ]
+    )
 
 class TelegramBotEdit:
     async def _send_message(self, context: ContextTypes.DEFAULT_TYPE, chat_id: int, **kwargs):
@@ -94,7 +101,7 @@ class TelegramBotCallbackQuery(TelegramBotEdit):
     async def query_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = get_data(update, is_query=True)
 
-        if any([s in data['message'] for s in list(CALLBACK_DATA_SEPARATORS)]):
+        if any([s in data.message for s in list(CALLBACK_DATA_SEPARATORS)]):
             # Handler-part for splitkeyboard return (like 'set_active:0' in callback)
             pass
         else:
@@ -107,7 +114,7 @@ class TelegramBot(TelegramBotCallbackQuery):
     async def message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = get_data(update)
 
-        if data['message'] == '': # Sample
+        if data.message == '': # Sample
             # Text message handler
             pass
         else:
@@ -118,7 +125,7 @@ class TelegramBot(TelegramBotCallbackQuery):
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = get_data(update)
         # '/start' Command echo-sample
-        await self._send_message(context=context, chat_id=data['chat_id'], text=data['message'])
+        await self._send_message(context=context, chat_id=data.chat_id, text=data.message, reply_markup=TelegramBotKeyboards.sample_reply_keyboard)
         #
     ################
 
